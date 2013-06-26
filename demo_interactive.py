@@ -30,6 +30,37 @@ def dumb_randomwalk_fixednoise():
 
     return interactive(initial_particles,2500,plotfunc)
 
+def smart_hdphsmm_mniwar_adaptive():
+    nlags = 2
+    MNIWARparams = (
+                3,
+                10*np.eye(2),
+                np.zeros((2,2*nlags+1)),
+                np.diag((10,)*(2*nlags) + (0.1,))
+                )
+
+    initial_particles = [
+            pf.AR(
+                num_ar_lags=nlags,
+                previous_outputs=[np.zeros(2),np.zeros(2)],
+                baseclass=lambda: \
+                        pm.HDPHMMSampler(
+                            alpha=3.,gamma=4.,
+                            obs_sampler_factory=lambda: pd.MNIWAR(*MNIWARparams),
+                            )
+                ) for itr in range(2500)]
+
+    def plotfunc(particles,weights):
+        for p in topk(particles,weights,5):
+            t = np.array(p.track)
+            plt.plot(t[:,0],t[:,1],'r-')
+            stateseq = np.array(p.sampler.stateseq)
+            for i in range(len(set(stateseq))):
+                plt.plot(t[stateseq == i,0],t[stateseq == i,1],COLORS[i % len(COLORS)] + 'o')
+            print p
+
+    return interactive(initial_particles,500,plotfunc)
+
 ##############
 #  back-end  #
 ##############
@@ -99,4 +130,11 @@ def plotmeanpath(particles,weights):
     for p,w in zip(particles[1:],weights[1:]):
         track += np.array(p.track) * w
     plt.plot(track[:,0],track[:,1],'k^:')
+
+##########
+#  main  #
+##########
+
+if __name__ == '__main__':
+    smart_hdphsmm_mniwar_adaptive()
 
