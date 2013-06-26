@@ -130,11 +130,9 @@ class ParticleFilter(object):
 #  Particle objects  #
 ######################
 
-# TODO TODO use __slots__
-
 class Particle(object):
     __metaclass__= abc.ABCMeta
-    # NOTE: also needs a 'track' instance member
+    __slots__ = ('track',)
 
     @abc.abstractmethod
     def sample_next(self,*args,**kwargs):
@@ -146,6 +144,8 @@ class Particle(object):
 
 
 class BasicParticle(Particle):
+    __slots__ = ('sampler',)
+
     def __init__(self,baseclass,maxtracklen=None):
         self.sampler = baseclass()
         self.track = deque(maxlen=maxtracklen)
@@ -168,6 +168,8 @@ class BasicParticle(Particle):
 
 
 class AR(BasicParticle):
+    __slots__ = ('lagged_outputs','initial_sampler',)
+
     def __init__(self,num_ar_lags,baseclass,previous_outputs=[],initial_baseclass=None,maxtracklen=None):
         assert len(previous_outputs) == num_ar_lags or initial_baseclass is not None
         super(AR,self).__init__(baseclass,maxtracklen)
@@ -193,6 +195,8 @@ class AR(BasicParticle):
 
 
 class LimitedAR(AR):
+    __slots__ = ('limitfunc',)
+
     def __init__(self,minmaxpairs,*args,**kwargs):
         super(LimitedAR,self).__init__(*args,**kwargs)
         mins, maxes = map(np.array,zip(*minmaxpairs))
@@ -214,11 +218,6 @@ class LimitedAR(AR):
         new = super(LimitedAR,self).copy()
         new.limitfunc = self.limitfunc
         return new
-
-    def __getstate__(self):
-        dct = self.__dict__.copy()
-        del dct['limitfunc']
-        return dct
 
 
 ###############
