@@ -15,11 +15,12 @@ COLORS = ['r','g','c','m','k']
 ##############
 
 def dumb_randomwalk_fixednoise():
-    noisechol = 30*np.eye(2)
+    nlags = 2
+    noisechol = 20*np.eye(2)
     initial_particles = [
             pf.AR(
-                    num_ar_lags=1,
-                    previous_outputs=[np.zeros(2)],
+                    num_ar_lags=nlags,
+                    previous_outputs=[np.zeros(2)]*nlags,
                     baseclass=lambda: \
                         pm.RandomWalk(noiseclass=lambda: pd.FixedNoise(noisechol=noisechol))
                     ) for itr in range(10000)]
@@ -57,7 +58,6 @@ def smart_hdphsmm_mniwar_adaptive():
             stateseq = np.array(p.sampler.stateseq)
             for i in range(len(set(stateseq))):
                 plt.plot(t[stateseq == i,0],t[stateseq == i,1],COLORS[i % len(COLORS)] + 'o')
-            print p
 
     return interactive(initial_particles,500,plotfunc)
 
@@ -66,7 +66,7 @@ def smart_hdphsmm_mniwar_adaptive():
 ##############
 
 def interactive(initial_particles,cutoff,plotfunc):
-    sigma = 10.
+    sigma = 25.
     def loglikelihood(_,locs,data):
         return -np.sum((locs - data)**2,axis=1)/(2*sigma**2)
 
@@ -122,7 +122,7 @@ def topk(items,scores,k):
 def plottopk(particles,weights,k):
     for p in topk(particles,weights,k):
         t = np.array(p.track)
-        plt.plot(t[:,0],t[:,1],'rx-')
+        plt.plot(t[:,0],t[:,1],'rx-',alpha=0.3)
         print p
 
 def plotmeanpath(particles,weights):
@@ -136,5 +136,5 @@ def plotmeanpath(particles,weights):
 ##########
 
 if __name__ == '__main__':
-    smart_hdphsmm_mniwar_adaptive()
+    dumb_randomwalk_fixednoise()
 
