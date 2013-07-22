@@ -142,6 +142,9 @@ class Particle(object):
     def copy(self):
         pass
 
+    def __getstate__(self):
+        return {'track':self.track}
+
 
 class BasicParticle(Particle):
     __slots__ = ('sampler',)
@@ -162,9 +165,6 @@ class BasicParticle(Particle):
 
     def __str__(self):
         return '%s(%s)' % (self.__class__.__name__,self.sampler.__str__())
-
-    def __getstate__(self):
-        return {'track':self.track}
 
 
 class AR(BasicParticle):
