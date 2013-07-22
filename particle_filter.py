@@ -130,95 +130,62 @@ class ParticleFilter(object):
 #  Particle objects  #
 ######################
 
+# particle objects should look like this to interface with the ParticleFilter
+
 class Particle(object):
-    __metaclass__= abc.ABCMeta
+    __metaclass__ = abc.ABCMeta
     __slots__ = ('track',)
 
-    @abc.abstractmethod
-    def sample_next(self,*args,**kwargs):
-        pass
+    def __init__(self,maxtracklen=None):
+        self.track = deque(maxlen=maxtracklen) # faster for pushing one at a time
 
     @abc.abstractmethod
-    def copy(self):
-        pass
-
-    def __getstate__(self):
-        return {'track':self.track}
-
-
-class BasicParticle(Particle):
-    __slots__ = ('sampler',)
-
-    def __init__(self,baseclass,maxtracklen=None):
-        self.sampler = baseclass()
-        self.track = deque(maxlen=maxtracklen)
-
     def sample_next(self,*args,**kwargs):
-        self.track.append(self.sampler.sample_next(*args,**kwargs))
-        return self.track[-1]
+        pass # must return something that can be put into a row of the _locs ndarray
 
+    @abc.abstractmethod
     def copy(self):
         new = self.__new__(self.__class__)
-        new.track = self.track.__copy__()
-        new.sampler = self.sampler.copy()
+        new.track = self.track.__copy__() # shallow copy of the deque
+        return new
+
+# the next two classes reflect a standard particle organization
+
+class ForwardSampler(object):
+    __metaclass__ = abc.ABCMeta
+    __slots__ = tuple()
+
+    @abc.abstractmethod
+    def initial_pos(self):
+        pass
+
+    @abc.abstractmethod
+    def sample_next(self,track,*args,**kwargs):
+        pass
+
+    def copy(self):
+        return self # optional, for copying any internal state
+
+class BasicParticle(Particle):
+    __slots__ = ('forward_sampler',)
+
+    def __init__(self,forward_sampler,maxtracklen=None):
+        super(BasicParticle,self).__init__(maxtracklen)
+        self.forward_sampler = forward_sampler
+        self.track.append(forward_sampler.initial_pos())
+
+    def sample_next(self,**kwargs):
+        state, emission = self.forward_sampler.sample_next(track=self.track,**kwargs)
+        self.track.append((state,emission))
+        return emission
+
+    def copy(self):
+        new = super(BasicParticle,self).copy()
+        new.forward_sampler = self.forward_sampler.copy()
         return new
 
     def __str__(self):
-        return '%s(%s)' % (self.__class__.__name__,self.sampler.__str__())
-
-
-class AR(BasicParticle):
-    __slots__ = ('lagged_outputs','initial_sampler',)
-
-    def __init__(self,num_ar_lags,baseclass,previous_outputs=[],initial_baseclass=None,maxtracklen=None):
-        assert len(previous_outputs) == num_ar_lags or initial_baseclass is not None
-        super(AR,self).__init__(baseclass,maxtracklen)
-        self.lagged_outputs = deque(previous_outputs,maxlen=num_ar_lags)
-        if len(self.lagged_outputs) < num_ar_lags:
-            self.initial_sampler = initial_baseclass()
-
-    def sample_next(self,*args,**kwargs):
-        if len(self.lagged_outputs) < self.lagged_outputs.maxlen:
-            out = self.initial_sampler.sample_next(lagged_outputs=self.lagged_outputs,*args,**kwargs)
-        else:
-            out = self.sampler.sample_next(lagged_outputs=self.lagged_outputs,*args,**kwargs)
-        self.lagged_outputs.appendleft(out)
-        self.track.append(out)
-        return out
-
-    def copy(self):
-        new = super(AR,self).copy()
-        new.lagged_outputs = self.lagged_outputs.__copy__()
-        if len(self.lagged_outputs) < self.lagged_outputs.maxlen:
-            new.initial_sampler = self.initial_sampler.copy()
-        return new
-
-
-class LimitedAR(AR):
-    __slots__ = ('limitfunc',)
-
-    def __init__(self,minmaxpairs,*args,**kwargs):
-        super(LimitedAR,self).__init__(*args,**kwargs)
-        mins, maxes = map(np.array,zip(*minmaxpairs))
-        self.limitfunc = lambda x: np.clip(x,mins,maxes)
-
-    def sample_next(self,*args,**kwargs):
-        if len(self.lagged_outputs) < self.lagged_outputs.maxlen:
-            out = self.initial_sampler.sample_next(lagged_outputs=self.lagged_outputs,*args,**kwargs)
-        else:
-            out = self.sampler.sample_next(lagged_outputs=self.lagged_outputs,*args,**kwargs)
-
-        out = self.limitfunc(out)
-
-        self.lagged_outputs.appendleft(out)
-        self.track.append(out)
-        return out
-
-    def copy(self):
-        new = super(LimitedAR,self).copy()
-        new.limitfunc = self.limitfunc
-        return new
-
+        return '%s(%s)' % (self.__class__.__name__,self.foward_sampler)
 
 ###############
 #  Utilities  #
@@ -226,7 +193,7 @@ class LimitedAR(AR):
 
 def topktracks(pf,k):
     indices = np.argsort(pf.weights_norm)[:-(k+1):-1]
-    return np.array([pf.particles[i].track for i in indices]), pf.weights_norm[indices]
+    return [pf.particles[i].track for i in indices], pf.weights_norm[indices]
 
 def meantrack(pf):
     track = np.array(pf.particles[0].track)*pf.weights_norm[0,na]
